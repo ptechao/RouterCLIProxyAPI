@@ -235,6 +235,7 @@ func getAvailableAuths(auths []*Auth, provider, model string, now time.Time) ([]
 			}
 			return nil, newModelCooldownError(model, providerForError, resetIn)
 		}
+		log.Warnf("getAvailableAuths: no available auths for model %s (candidates=%d, cooldowns=%d)", model, len(auths), cooldownCount)
 		return nil, &Error{Code: "auth_unavailable", Message: "no auth available"}
 	}
 
@@ -386,6 +387,7 @@ func isAuthBlockedForModel(auth *Auth, model string, now time.Time) (bool, block
 			}
 			if ok && state != nil {
 				if state.Status == StatusDisabled {
+					log.Debugf("isAuthBlockedForModel: auth %s blocked for model %s (status disabled)", auth.ID, model)
 					return true, blockReasonDisabled, time.Time{}
 				}
 				if state.Unavailable {
@@ -401,8 +403,10 @@ func isAuthBlockedForModel(auth *Auth, model string, now time.Time) (bool, block
 							next = now
 						}
 						if state.Quota.Exceeded {
+							log.Debugf("isAuthBlockedForModel: auth %s blocked for model %s (quota exceeded, next=%v)", auth.ID, model, next)
 							return true, blockReasonCooldown, next
 						}
+						log.Debugf("isAuthBlockedForModel: auth %s blocked for model %s (unavailable, next=%v)", auth.ID, model, next)
 						return true, blockReasonOther, next
 					}
 				}

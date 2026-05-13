@@ -119,6 +119,14 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 	httpReq.Header.Set("Content-Type", "application/json")
 	if apiKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+	} else if authHeader := opts.Headers.Get("Authorization"); authHeader != "" {
+		httpReq.Header.Set("Authorization", authHeader)
+	}
+	// Forward OpenAI specific organizational headers if present in client request.
+	for _, h := range []string{"OpenAI-Organization", "OpenAI-Project", "OpenAI-Beta"} {
+		if val := opts.Headers.Get(h); val != "" {
+			httpReq.Header.Set(h, val)
+		}
 	}
 	httpReq.Header.Set("User-Agent", "cli-proxy-openai-compat")
 	var attrs map[string]string
@@ -222,6 +230,14 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 	httpReq.Header.Set("Content-Type", "application/json")
 	if apiKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+	} else if authHeader := opts.Headers.Get("Authorization"); authHeader != "" {
+		httpReq.Header.Set("Authorization", authHeader)
+	}
+	// Forward OpenAI specific organizational headers if present in client request.
+	for _, h := range []string{"OpenAI-Organization", "OpenAI-Project", "OpenAI-Beta"} {
+		if val := opts.Headers.Get(h); val != "" {
+			httpReq.Header.Set(h, val)
+		}
 	}
 	httpReq.Header.Set("User-Agent", "cli-proxy-openai-compat")
 	var attrs map[string]string

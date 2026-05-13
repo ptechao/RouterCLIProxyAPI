@@ -3020,8 +3020,10 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 	}
 	if len(candidates) == 0 {
 		m.mu.RUnlock()
+		log.Warnf("pickNextMixedLegacy: no candidates for providers %v and model %s", providers, model)
 		return nil, nil, "", &Error{Code: "auth_not_found", Message: "no auth available"}
 	}
+	log.Infof("pickNextMixedLegacy: found %d candidates for model %s", len(candidates), model)
 	available, errAvailable := m.availableAuthsForRouteModel(candidates, "mixed", model, time.Now())
 	if errAvailable != nil {
 		m.mu.RUnlock()

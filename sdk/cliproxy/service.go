@@ -934,7 +934,15 @@ func (s *Service) Run(ctx context.Context) error {
 		log.Debug("service context cancelled, shutting down...")
 		return ctx.Err()
 	case errServer := <-s.serverErr:
-		return errServer
+		if errServer != nil {
+			log.Errorf("server exited with error: %v", errServer)
+			return errServer
+		}
+		// If server returns nil, it means it was stopped gracefully or unexpectedly.
+		// We should still wait for the main context to be done if possible.
+		log.Warn("server returned nil without error, waiting for context cancellation...")
+		<-ctx.Done()
+		return ctx.Err()
 	}
 }
 
@@ -1200,37 +1208,49 @@ func (s *Service) registerModelsForAuth(a *coreauth.Auth) {
 				if strings.EqualFold(compat.Name, compatName) {
 					isCompatAuth = true
 					// Convert compatibility models to registry models
-					ms := make([]*ModelInfo, 0, len(compat.Models))
-					for j := range compat.Models {
-						m := compat.Models[j]
-						// Use alias as model ID, fallback to name if alias is empty
-						modelID := m.Alias
-						if modelID == "" {
-							modelID = m.Name
+					var ms []*ModelInfo
+					if len(compat.Models) > 0 {
+						ms = make([]*ModelInfo, 0, len(compat.Models))
+						for j := range compat.Models {
+							m := compat.Models[j]
+							// Use alias as model ID, fallback to name if alias is empty
+							modelID := m.Alias
+							if modelID == "" {
+								modelID = m.Name
+							}
+							thinking := m.Thinking
+							if thinking == nil {
+								thinking = &registry.ThinkingSupport{Levels: []string{"low", "medium", "high"}}
+							}
+							ms = append(ms, &ModelInfo{
+								ID:          modelID,
+								Object:      "model",
+								Created:     time.Now().Unix(),
+								OwnedBy:     compat.Name,
+								Type:        "openai-compatibility",
+								DisplayName: modelID,
+								UserDefined: false,
+								Thinking:    thinking,
+							})
 						}
-						thinking := m.Thinking
-						if thinking == nil {
-							thinking = &registry.ThinkingSupport{Levels: []string{"low", "medium", "high"}}
+					} else if strings.EqualFold(compat.Name, "openai-manual") {
+						// Fallback to standard OpenAI models for the manual provider.
+						ms = registry.GetCodexProModels()
+						for i := range ms {
+							ms[i].OwnedBy = compat.Name
+							ms[i].Type = "openai-compatibility"
 						}
-						ms = append(ms, &ModelInfo{
-							ID:          modelID,
-							Object:      "model",
-							Created:     time.Now().Unix(),
-							OwnedBy:     compat.Name,
-							Type:        "openai-compatibility",
-							DisplayName: modelID,
-							UserDefined: false,
-							Thinking:    thinking,
-						})
 					}
 					// Register and return
 					if len(ms) > 0 {
 						if providerKey == "" {
 							providerKey = "openai-compatibility"
 						}
+						log.Infof("Registering %d models for compat auth %s (provider=%s)", len(ms), a.ID, providerKey)
 						s.registerResolvedModelsForAuth(a, providerKey, applyModelPrefixes(ms, a.Prefix, s.cfg.ForceModelPrefix))
 					} else {
 						// Ensure stale registrations are cleared when model list becomes empty.
+						log.Debugf("Unregistering compat auth %s due to empty model list", a.ID)
 						GlobalModelRegistry().UnregisterClient(a.ID)
 					}
 					return
